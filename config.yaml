@@ -1,0 +1,53 @@
+# ============================================================
+# Job Hunter Configuration
+#
+# This is the ONLY file you need to edit to control what gets
+# scraped and where results go. Add or remove URLs freely under
+# `target_urls` — no code changes required.
+#
+# Secrets (SMTP password, Anthropic API key) do NOT go in this
+# file. Copy .env.example to .env and put them there instead —
+# .env is git-ignored so you never accidentally commit a secret.
+# ============================================================
+
+# The exact list of URLs currently being crawled.
+# Add a new site by adding a line here. Remove one by deleting its line.
+target_urls:
+  - https://hub.globalsportsjobs.com/jobs-senior-management
+  - https://www.uksport.gov.uk/jobs-in-sport
+  - https://www.forsythbarnes.com/jobs?sector=sports
+  - https://sportswork.co
+  - https://www.linkedin.com/jobs/sports-jobs-london
+
+email:
+  # Where the job digest gets sent.
+  destination_email: "raj.arjan@gmail.com"
+
+  # SMTP settings for the account that SENDS the digest.
+  # Gmail example: smtp.gmail.com / 587, and an App Password (not your
+  # normal password) in .env as SMTP_PASSWORD.
+  smtp_host: "smtp.gmail.com"
+  smtp_port: 587
+  sender_email: "your-sender-address@gmail.com"
+  # smtp password -> read from .env as SMTP_PASSWORD
+
+llm:
+  # Which model evaluates each scraped listing.
+  # anthropic api key -> read from .env as ANTHROPIC_API_KEY
+  model: "claude-opus-4-8"
+
+# Criteria the LLM evaluates every listing against.
+criteria:
+  min_seniority: "Senior, Director, or Executive level"
+  industry: "Sports"
+  location: "London"
+  # Only listings scoring at or above this get included in the email digest (1-10).
+  min_match_score: 7
+
+scraper:
+  # Run the browser without a visible window. Set to false to watch it work.
+  headless: true
+  # How long (ms) to wait for a page to load before giving up on that site.
+  page_timeout_ms: 30000
+  # Cap on how many candidate listings to pull from a single site per run.
+  max_jobs_per_site: 25
