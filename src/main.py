@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-import anthropic
+from google import genai
 
 from src.emailer import send_digest
 from src.evaluator import evaluate_all
@@ -31,7 +31,7 @@ def main() -> None:
     )
     logger.info("Found %d candidate listing(s) to evaluate.", len(listings))
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = genai.Client(api_key=settings.gemini_api_key)
     evaluations = evaluate_all(client, settings.llm_model, listings, settings.criteria)
     logger.info("Evaluated %d listing(s).", len(evaluations))
 

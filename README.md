@@ -1,7 +1,7 @@
 # Job Hunter
 
 Automated job scraper and evaluator, with a live dashboard on top. It
-crawls a configurable list of job board URLs with Playwright, has Claude
+crawls a configurable list of job board URLs with Playwright, has Gemini
 score each listing against your criteria (seniority, industry, location),
 emails you an HTML digest of everything scoring 7/10+, and shows every run
 as a browsable set of job cards in a web dashboard.
@@ -57,7 +57,7 @@ playwright install chromium
 - Set your destination email (`email.destination_email`)
 - Set the sender account's SMTP host/port/address (`email.*`)
 - Adjust match criteria and the score threshold (`criteria.*`)
-- Choose the Claude model (`llm.model`)
+- Choose the Gemini model (`llm.model`)
 
 **`.env`** — copy `.env.example` to `.env` and fill in the two secrets:
 
@@ -67,7 +67,7 @@ cp .env.example .env
 
 ```
 SMTP_PASSWORD=your-smtp-app-password
-ANTHROPIC_API_KEY=sk-ant-...
+GEMINI_API_KEY=your-gemini-api-key
 ```
 
 Secrets are kept out of `config.yaml` on purpose — that file is meant to be
@@ -87,7 +87,7 @@ python -m src.main
 ```
 
 Scrapes every URL in `config.yaml`, evaluates each candidate listing with
-Claude, and — if anything scores at or above `min_match_score` — emails a
+Gemini, and — if anything scores at or above `min_match_score` — emails a
 digest to `destination_email`. If nothing qualifies, no email is sent
 (this is logged, not an error).
 
@@ -119,7 +119,7 @@ renders every evaluated listing as a job card once it finishes.
 pytest
 ```
 
-Mocks the Anthropic client, SMTP, and the Playwright page — no API key,
+Mocks the Gemini client, SMTP, and the Playwright page — no API key,
 network access, or browser install needed.
 
 ---
@@ -133,21 +133,30 @@ execution time limits far shorter than a multi-site scrape+evaluate run)
 
 ### Backend on Render
 
+`render.yaml` at the repo root documents the service (Docker, health
+check at `/api/health`) and can be deployed via Render's **Blueprint**
+flow — but Blueprints can require a paid plan on some accounts. The
+identical service can be created manually on the **Free** instance type
+instead:
+
 1. Push this repo to GitHub.
-2. In Render: **New → Blueprint**, point it at the repo. `render.yaml` at
-   the repo root defines the service (Docker, health check at
-   `/api/health`) — Render will pick it up automatically. Or create a
-   **New → Web Service** manually with "Docker" as the environment and
-   the repo root as the build context.
-3. Set these environment variables on the service (Render dashboard →
+2. In Render: **New → Web Service** (not Blueprint), connect the repo.
+3. Configure: **Branch** = your branch, **Root Directory** = blank (the
+   `Dockerfile` is at the repo root), **Environment** = Docker,
+   **Instance Type** = Free.
+4. Set these environment variables on the service (Render dashboard →
    Environment):
-   - `ANTHROPIC_API_KEY`
+   - `GEMINI_API_KEY`
    - `SMTP_PASSWORD`
    - `CORS_ORIGINS` — your Vercel frontend URL, e.g. `https://job-hunter.vercel.app` (comma-separate multiple origins if needed)
-4. Deploy. Render builds the `Dockerfile`, which installs Chromium via
+5. Set the health check path to `/api/health`.
+6. Deploy. Render builds the `Dockerfile`, which installs Chromium via
    `playwright install --with-deps chromium` — no extra setup needed for
    scraping to work.
-5. Note the service's public URL (e.g. `https://job-hunter-backend.onrender.com`) — the frontend needs it.
+7. Note the service's public URL (e.g. `https://job-hunter-backend.onrender.com`) — the frontend needs it.
+
+The Free instance type spins down after ~15 minutes of inactivity and
+takes 30–60s to wake back up on the next request.
 
 **Storage note:** by default the backend stores run history in a local
 SQLite file. Render's free web service tier has an **ephemeral

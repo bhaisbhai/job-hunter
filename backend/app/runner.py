@@ -9,7 +9,7 @@ import logging
 import traceback
 from datetime import datetime, timezone
 
-import anthropic
+from google import genai
 from sqlmodel import Session
 
 from src.emailer import send_digest
@@ -48,7 +48,7 @@ def execute_run(run_id: str, send_email: bool) -> None:
         )
         _set_status(run_id, status="evaluating", listings_scraped=len(listings))
 
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        client = genai.Client(api_key=settings.gemini_api_key)
         matches: list[JobMatch] = []
         for listing in listings:
             evaluation = evaluate_listing(

@@ -3,7 +3,7 @@ import type { RunStatus } from "../types";
 const STAGE_LABEL: Record<string, string> = {
   pending: "Queued…",
   scraping: "Scraping job sites…",
-  evaluating: "Evaluating listings with Claude…",
+  evaluating: "Evaluating listings with Gemini…",
 };
 
 interface Props {

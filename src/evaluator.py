@@ -1,7 +1,7 @@
 """LLM evaluator.
 
-Sends each scraped listing's cleaned text to Claude and gets back a
-strictly-typed JobEvaluation via structured outputs — no manual JSON
+Sends each scraped listing's cleaned text to Gemini and gets back a
+strictly-typed JobEvaluation via structured output — no manual JSON
 parsing or prompt-engineered format coaxing required.
 """
 
@@ -10,7 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-import anthropic
+from google import genai
+from google.genai import types
 from pydantic import BaseModel, Field
 
 from src.scraper import JobListing
@@ -50,7 +51,7 @@ be null if no salary is mentioned."""
 
 
 def evaluate_listing(
-    client: anthropic.Anthropic,
+    client: genai.Client,
     model: str,
     raw_text: str,
     source_url: str,
@@ -58,28 +59,27 @@ def evaluate_listing(
 ) -> Optional[JobEvaluation]:
     prompt = build_prompt(raw_text, source_url, criteria)
     try:
-        response = client.messages.parse(
+        response = client.models.generate_content(
             model=model,
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}],
-            output_format=JobEvaluation,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=JobEvaluation,
+            ),
         )
-    except anthropic.APIStatusError as exc:
+    except Exception as exc:
         logger.warning("LLM evaluation failed for %s: %s", source_url, exc)
         return None
-    except Exception as exc:
-        logger.warning("Could not evaluate listing from %s: %s", source_url, exc)
-        return None
 
-    if getattr(response, "stop_reason", None) == "refusal" or response.parsed_output is None:
+    if response.parsed is None:
         logger.warning("LLM declined to evaluate listing from %s", source_url)
         return None
 
-    return response.parsed_output
+    return response.parsed
 
 
 def evaluate_all(
-    client: anthropic.Anthropic,
+    client: genai.Client,
     model: str,
     listings: list[JobListing],
     criteria: dict,

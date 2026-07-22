@@ -1,4 +1,4 @@
-"""Unit tests for the LLM evaluator. The Anthropic client is mocked, so
+"""Unit tests for the LLM evaluator. The Gemini client is mocked, so
 these run offline with no API key and no network access.
 """
 
@@ -15,11 +15,12 @@ CRITERIA = {
     "location": "London",
 }
 
+MODEL = "gemini-2.5-flash"
 
-def _fake_parse_response(parsed_output, stop_reason="end_turn"):
+
+def _fake_response(parsed):
     response = MagicMock()
-    response.stop_reason = stop_reason
-    response.parsed_output = parsed_output
+    response.parsed = parsed
     return response
 
 
@@ -33,30 +34,30 @@ def test_evaluate_listing_returns_parsed_evaluation():
         reasoning="Senior sports role based in London.",
     )
     client = MagicMock()
-    client.messages.parse.return_value = _fake_parse_response(expected)
+    client.models.generate_content.return_value = _fake_response(expected)
 
     result = evaluate_listing(
         client=client,
-        model="claude-opus-4-8",
+        model=MODEL,
         raw_text="Head of Partnerships at Acme Sports, London, £90k-£110k",
         source_url="https://example.com/jobs",
         criteria=CRITERIA,
     )
 
     assert result == expected
-    client.messages.parse.assert_called_once()
-    _, kwargs = client.messages.parse.call_args
-    assert kwargs["output_format"] is JobEvaluation
-    assert kwargs["model"] == "claude-opus-4-8"
+    client.models.generate_content.assert_called_once()
+    _, kwargs = client.models.generate_content.call_args
+    assert kwargs["model"] == MODEL
+    assert kwargs["config"].response_schema is JobEvaluation
 
 
-def test_evaluate_listing_returns_none_on_refusal():
+def test_evaluate_listing_returns_none_when_unparsed():
     client = MagicMock()
-    client.messages.parse.return_value = _fake_parse_response(None, stop_reason="refusal")
+    client.models.generate_content.return_value = _fake_response(None)
 
     result = evaluate_listing(
         client=client,
-        model="claude-opus-4-8",
+        model=MODEL,
         raw_text="some listing text",
         source_url="https://example.com/jobs",
         criteria=CRITERIA,
@@ -67,11 +68,11 @@ def test_evaluate_listing_returns_none_on_refusal():
 
 def test_evaluate_listing_returns_none_on_api_error():
     client = MagicMock()
-    client.messages.parse.side_effect = RuntimeError("network blip")
+    client.models.generate_content.side_effect = RuntimeError("network blip")
 
     result = evaluate_listing(
         client=client,
-        model="claude-opus-4-8",
+        model=MODEL,
         raw_text="some listing text",
         source_url="https://example.com/jobs",
         criteria=CRITERIA,
@@ -90,9 +91,9 @@ def test_evaluate_all_skips_failed_evaluations():
         reasoning="Matches all criteria.",
     )
     client = MagicMock()
-    client.messages.parse.side_effect = [
-        _fake_parse_response(good),
-        _fake_parse_response(None, stop_reason="refusal"),
+    client.models.generate_content.side_effect = [
+        _fake_response(good),
+        _fake_response(None),
     ]
 
     listings = [
@@ -100,6 +101,6 @@ def test_evaluate_all_skips_failed_evaluations():
         JobListing(source_url="https://example.com/b", raw_text="listing B"),
     ]
 
-    results = evaluate_all(client, "claude-opus-4-8", listings, CRITERIA)
+    results = evaluate_all(client, MODEL, listings, CRITERIA)
 
     assert results == [good]

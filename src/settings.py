@@ -2,7 +2,7 @@
 
 Non-secret settings (target URLs, criteria, SMTP host, etc.) come from
 config.yaml, which is meant to be edited directly by the end user.
-Secrets (SMTP password, Anthropic API key) come from environment
+Secrets (SMTP password, Gemini API key) come from environment
 variables, loaded from a local .env file — see .env.example.
 """
 
@@ -32,7 +32,7 @@ class Settings:
     smtp_password: str
 
     llm_model: str
-    anthropic_api_key: str
+    gemini_api_key: str
 
     min_seniority: str
     industry: str
@@ -66,13 +66,13 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         raw = yaml.safe_load(f)
 
     smtp_password = os.environ.get("SMTP_PASSWORD")
-    anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
+    gemini_api_key = os.environ.get("GEMINI_API_KEY")
 
     missing = [
         name
         for name, val in [
             ("SMTP_PASSWORD", smtp_password),
-            ("ANTHROPIC_API_KEY", anthropic_api_key),
+            ("GEMINI_API_KEY", gemini_api_key),
         ]
         if not val
     ]
@@ -90,7 +90,7 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         sender_email=raw["email"]["sender_email"],
         smtp_password=smtp_password,
         llm_model=raw["llm"]["model"],
-        anthropic_api_key=anthropic_api_key,
+        gemini_api_key=gemini_api_key,
         min_seniority=raw["criteria"]["min_seniority"],
         industry=raw["criteria"]["industry"],
         location=raw["criteria"]["location"],
