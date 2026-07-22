@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: theme("fontFamily.sans");
+}
+
+::selection {
+  background-color: rgba(99, 102, 241, 0.35);
+}

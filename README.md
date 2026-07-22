@@ -1,32 +1,51 @@
 # Job Hunter
 
-Automated job scraper and evaluator. It crawls a configurable list of job
-board URLs with Playwright, extracts candidate listing text, has Claude
+Automated job scraper and evaluator, with a live dashboard on top. It
+crawls a configurable list of job board URLs with Playwright, has Claude
 score each listing against your criteria (seniority, industry, location),
-and emails you an HTML digest of everything that scores 7/10 or higher.
+emails you an HTML digest of everything scoring 7/10+, and shows every run
+as a browsable set of job cards in a web dashboard.
 
 ## Project structure
 
 ```
 job-hunter/
 ├── config.yaml         # EDIT THIS: target URLs, destination email, criteria
-├── .env.example        # copy to .env and fill in secrets
-├── requirements.txt
-├── src/
-│   ├── settings.py      # loads config.yaml + .env
-│   ├── scraper.py        # Playwright scraping + text extraction
-│   ├── evaluator.py       # Claude structured-output evaluation
-│   ├── emailer.py          # HTML digest + smtplib sending
-│   └── main.py              # orchestrates the whole run
-└── tests/                    # offline unit tests (no network/API calls)
+├── .env.example        # copy to .env and fill in secrets (local dev / CLI use)
+├── requirements.txt     # shared scraping/evaluation/email deps
+├── src/                  # core pipeline — used by both the CLI and the API
+│   ├── settings.py
+│   ├── scraper.py
+│   ├── evaluator.py
+│   ├── emailer.py
+│   └── main.py            # CLI entry point: python -m src.main
+├── tests/                  # offline unit tests for src/ (no network/API calls)
+├── backend/                 # FastAPI web API wrapping src/, with run history
+│   ├── app/
+│   │   ├── main.py           # routes
+│   │   ├── runner.py          # background scrape+evaluate+email job
+│   │   ├── models.py           # Run / JobMatch DB tables (SQLModel)
+│   │   └── db.py                # SQLite by default; DATABASE_URL to use Postgres
+│   └── requirements.txt
+├── frontend/                # React + Tailwind dashboard
+│   └── src/
+├── Dockerfile               # builds the backend (Playwright + FastAPI) for deploy
+└── render.yaml               # Render blueprint for the backend service
 ```
+
+There are two independent ways to run this:
+
+1. **CLI** (`python -m src.main`) — scrapes, evaluates, emails, exits. Good for a cron job.
+2. **Web app** (`backend/` + `frontend/`) — same pipeline, triggered from a dashboard, with run history and a "Run Now" button. Both share the exact same `src/` code and `config.yaml`/`.env`.
+
+---
 
 ## 1. Install
 
 ```bash
 cd job-hunter
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt -r backend/requirements.txt
 playwright install chromium
 ```
 
@@ -53,41 +72,126 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 Secrets are kept out of `config.yaml` on purpose — that file is meant to be
 freely readable/editable, and `.env` is git-ignored so a real key or
-password never ends up in version control.
+password never ends up in version control. In production (Render), these
+same two values are set as dashboard env vars instead of a `.env` file —
+see Deployment below.
 
 If you use Gmail as the sender, `smtp_host`/`smtp_port` in `config.yaml`
 are already set for it; you'll need a Google **App Password** (not your
 normal login password) for `SMTP_PASSWORD`.
 
-## 3. Run it
+## 3. Run it — CLI
 
 ```bash
 python -m src.main
 ```
 
-This scrapes every URL in `config.yaml`, evaluates each candidate listing
-with Claude, and — if anything scores at or above `min_match_score` —
-emails a digest to `destination_email`. If nothing qualifies, no email is
-sent (this is logged, not an error).
+Scrapes every URL in `config.yaml`, evaluates each candidate listing with
+Claude, and — if anything scores at or above `min_match_score` — emails a
+digest to `destination_email`. If nothing qualifies, no email is sent
+(this is logged, not an error).
 
-## 4. Run the tests
+## 4. Run it — web dashboard (local dev)
 
-The test suite mocks the Anthropic client, SMTP, and the Playwright page —
-it needs no API key, no network access, and no browser install:
+Two processes, run in separate terminals:
+
+```bash
+# Terminal 1 — backend API
+source .venv/bin/activate
+uvicorn backend.app.main:app --reload --port 8000
+```
+
+```bash
+# Terminal 2 — frontend
+cd frontend
+npm install
+cp .env.example .env    # VITE_API_URL=http://localhost:8000
+npm run dev
+```
+
+Open the printed `localhost:5173` URL. Click **Run Now** to trigger a
+live scrape+evaluate cycle; the dashboard polls and shows progress, then
+renders every evaluated listing as a job card once it finishes.
+
+## 5. Run the tests
 
 ```bash
 pytest
 ```
 
+Mocks the Anthropic client, SMTP, and the Playwright page — no API key,
+network access, or browser install needed.
+
+---
+
+## Deployment
+
+**Frontend → Vercel. Backend → Render.** They're split because Vercel's
+serverless functions can't run Playwright (no persistent Chromium, and
+execution time limits far shorter than a multi-site scrape+evaluate run)
+— Render runs the backend as a normal long-lived container instead.
+
+### Backend on Render
+
+1. Push this repo to GitHub.
+2. In Render: **New → Blueprint**, point it at the repo. `render.yaml` at
+   the repo root defines the service (Docker, health check at
+   `/api/health`) — Render will pick it up automatically. Or create a
+   **New → Web Service** manually with "Docker" as the environment and
+   the repo root as the build context.
+3. Set these environment variables on the service (Render dashboard →
+   Environment):
+   - `ANTHROPIC_API_KEY`
+   - `SMTP_PASSWORD`
+   - `CORS_ORIGINS` — your Vercel frontend URL, e.g. `https://job-hunter.vercel.app` (comma-separate multiple origins if needed)
+4. Deploy. Render builds the `Dockerfile`, which installs Chromium via
+   `playwright install --with-deps chromium` — no extra setup needed for
+   scraping to work.
+5. Note the service's public URL (e.g. `https://job-hunter-backend.onrender.com`) — the frontend needs it.
+
+**Storage note:** by default the backend stores run history in a local
+SQLite file. Render's free web service tier has an **ephemeral
+filesystem** — that file resets whenever the service restarts, redeploys,
+or spins down from inactivity. For run history that survives restarts,
+either upgrade to a Render plan with a persistent **Disk** mounted at
+`/app/backend/data`, or point `DATABASE_URL` (env var) at an external
+Postgres instance (Render offers managed Postgres) — `db.py` already
+supports both with no code changes; you'd just add `psycopg2-binary` to
+`backend/requirements.txt`.
+
+**Config note:** `config.yaml` is baked into the Docker image at deploy
+time. Changing target URLs, criteria, or the email threshold means
+editing `config.yaml` and redeploying — there's no in-dashboard config
+editor in this build.
+
+### Frontend on Vercel
+
+1. In Vercel: **New Project**, import the same GitHub repo.
+2. Set **Root Directory** to `frontend` (this is a monorepo — Vercel
+   needs to know the frontend lives in a subfolder). Framework preset
+   "Vite" should be auto-detected.
+3. Set the environment variable:
+   - `VITE_API_URL` — the Render backend URL from above, e.g. `https://job-hunter-backend.onrender.com`
+4. Deploy. Vercel builds with `npm run build` and serves `frontend/dist`.
+5. Go back to Render and set `CORS_ORIGINS` to this Vercel URL (step 3 above), then redeploy the backend so it accepts requests from the live frontend.
+
+### After both are live
+
+Visit the Vercel URL, click **Run Now**. First real run against actual
+job sites will take a while (multiple sites × up to `max_jobs_per_site`
+LLM evaluations each) — consider lowering `max_jobs_per_site` in
+`config.yaml` while testing to keep runs fast and cheap, then raise it
+back up once you're happy with the results.
+
 ## Notes on scraping real job boards
 
 Job board markup varies a lot and changes over time, and some sites (like
-LinkedIn) actively try to block automated browsing. `scraper.py` uses a set
-of common "job card" selectors (`article`, `li[class*=job]`, etc.) and
-falls back to chunking the raw page text if none of them match, so a run
-never silently returns zero listings for a page that actually loaded — but
-for best results on a specific site you may want to add a selector to
-`CARD_SELECTORS` in `src/scraper.py` that matches that site's markup.
+LinkedIn) actively try to block automated browsing. `src/scraper.py` uses
+a set of common "job card" selectors (`article`, `li[class*=job]`, etc.)
+and falls back to chunking the raw page text if none of them match, so a
+run never silently returns zero listings for a page that actually loaded
+— but for best results on a specific site you may want to add a selector
+to `CARD_SELECTORS` in `src/scraper.py` that matches that site's markup.
 Because the evaluator receives raw, possibly-messy text and is instructed
-to score obviously-non-job text low, an imperfect extraction degrades to a
-low `match_score` rather than a crash.
+to score obviously-non-job text low, an imperfect extraction degrades to
+a low `match_score` rather than a crash.

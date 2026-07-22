@@ -1,0 +1,42 @@
+export type RunStatus = "pending" | "scraping" | "evaluating" | "completed" | "failed";
+
+export interface Run {
+  id: string;
+  started_at: string;
+  finished_at: string | null;
+  status: RunStatus;
+  listings_scraped: number;
+  evaluated_count: number;
+  matched_count: number;
+  email_sent: boolean;
+  error_message: string | null;
+}
+
+export interface JobMatch {
+  id: number;
+  run_id: string;
+  job_title: string;
+  company: string;
+  url: string;
+  salary_range: string | null;
+  match_score: number;
+  reasoning: string;
+  source_url: string;
+}
+
+export interface RunDetail {
+  run: Run;
+  matches: JobMatch[];
+}
+
+export interface Config {
+  target_urls: string[];
+  destination_email: string;
+  llm_model: string;
+  criteria: {
+    min_seniority: string;
+    industry: string;
+    location: string;
+  };
+  min_match_score: number;
+}

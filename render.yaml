@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: job-hunter-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://your-frontend.vercel.app
