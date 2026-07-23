@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: job-hunter-backend
+    name: scout-backend
     env: docker
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health

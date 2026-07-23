@@ -18,7 +18,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 if DATABASE_URL:
     engine = create_engine(DATABASE_URL)
 else:
-    DB_PATH = Path(__file__).resolve().parent.parent / "data" / "job_hunter.db"
+    DB_PATH = Path(__file__).resolve().parent.parent / "data" / "scout.db"
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
 

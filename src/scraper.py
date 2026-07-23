@@ -1,10 +1,12 @@
 """Playwright-based scraper.
 
 Iterates the configured target URLs, waits for dynamic (JS-rendered)
-content to load, and extracts candidate job-listing text blocks. Real
-job boards vary widely in markup, so this uses a small set of common
-"job card" selectors first, and falls back to chunking the page's
-visible text if none of them match — see README for tuning notes.
+content to load, and extracts candidate item text blocks — job
+listings, apartment listings, product cards, whatever the configured
+scout is looking for. Real sites vary widely in markup, so this uses
+a small set of common "card" selectors first, and falls back to
+chunking the page's visible text if none of them match — see README
+for tuning notes.
 """
 
 from __future__ import annotations
@@ -16,11 +18,17 @@ from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, sy
 
 logger = logging.getLogger(__name__)
 
-# Tried in order against each listing page to find repeated job-card
-# containers. Not site-specific — covers common patterns across job boards.
+# Tried in order against each page to find repeated item-card containers.
+# Not site-specific — covers common patterns across job boards, listing
+# sites, and marketplaces alike.
 CARD_SELECTORS = [
     "article",
+    "li[class*='card']",
+    "li[class*='listing']",
+    "li[class*='item']",
     "li[class*='job']",
+    "div[class*='card']",
+    "div[class*='listing']",
     "div[class*='job-card']",
     "div[class*='job-listing']",
     "div[class*='vacancy']",
@@ -37,7 +45,7 @@ USER_AGENT = (
 
 
 @dataclass
-class JobListing:
+class ScrapedListing:
     source_url: str
     raw_text: str
 
@@ -82,7 +90,7 @@ def _fallback_page_text(page: Page) -> list[str]:
     return chunks
 
 
-def scrape_url(page: Page, url: str, max_jobs: int, timeout_ms: int) -> list[JobListing]:
+def scrape_url(page: Page, url: str, max_items: int, timeout_ms: int) -> list[ScrapedListing]:
     logger.info("Scraping %s", url)
     try:
         page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
@@ -98,23 +106,23 @@ def scrape_url(page: Page, url: str, max_jobs: int, timeout_ms: int) -> list[Job
     if not blocks:
         blocks = _fallback_page_text(page)
 
-    return [JobListing(source_url=url, raw_text=block) for block in blocks[:max_jobs]]
+    return [ScrapedListing(source_url=url, raw_text=block) for block in blocks[:max_items]]
 
 
 def scrape_all(
     urls: list[str],
     headless: bool,
-    max_jobs_per_site: int,
+    max_items_per_site: int,
     page_timeout_ms: int,
-) -> list[JobListing]:
-    listings: list[JobListing] = []
+) -> list[ScrapedListing]:
+    listings: list[ScrapedListing] = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
         context = browser.new_context(user_agent=USER_AGENT)
         page = context.new_page()
         try:
             for url in urls:
-                listings.extend(scrape_url(page, url, max_jobs_per_site, page_timeout_ms))
+                listings.extend(scrape_url(page, url, max_items_per_site, page_timeout_ms))
         finally:
             browser.close()
     return listings

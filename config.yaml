@@ -1,26 +1,49 @@
 # ============================================================
-# Job Hunter Configuration
+# Scout Configuration
 #
-# This is the ONLY file you need to edit to control what gets
-# scraped and where results go. Add or remove URLs freely under
-# `target_urls` — no code changes required.
+# This is the ONLY file you need to edit to repurpose Scout for a
+# different task. Scout is a generic crawl-and-evaluate engine: it
+# visits `target_urls`, has an LLM score each item it finds against
+# `instructions`, and emails you anything that scores at or above
+# `min_match_score`. The example below configures it as a job
+# scout, but `instructions` and `target_urls` can describe anything
+# scrapeable — apartment listings, product deals, event postings,
+# whatever you're keeping an eye out for.
 #
 # Secrets (SMTP password, Gemini API key) do NOT go in this
 # file. Copy .env.example to .env and put them there instead —
 # .env is git-ignored so you never accidentally commit a secret.
 # ============================================================
 
-# The exact list of URLs currently being crawled.
-# Add a new site by adding a line here. Remove one by deleting its line.
-target_urls:
-  - https://hub.globalsportsjobs.com/jobs-senior-management
-  - https://www.uksport.gov.uk/jobs-in-sport
-  - https://www.forsythbarnes.com/jobs?sector=sports
-  - https://sportswork.co
-  - https://www.linkedin.com/jobs/sports-jobs-london
+scout:
+  # Shown in the dashboard and in digest emails.
+  name: "Sports Executive Jobs — London"
+
+  # Free-form description of what you're looking for and how to score it.
+  # This is dropped straight into the prompt sent to the LLM for every
+  # item it scrapes — rewrite this paragraph to scout something else
+  # entirely without touching any code.
+  instructions: |
+    Look for roles at the Senior, Director, or Executive level, in the
+    Sports industry, based in London. Score close matches on all three
+    (seniority, industry, location) highly — 8 to 10. Partial matches
+    (e.g. right industry but wrong seniority, or right role but wrong
+    city) should score 4 to 7. Irrelevant listings should score 1 to 3.
+
+  # Only items scoring at or above this get included in the email digest (1-10).
+  min_match_score: 7
+
+  # The exact list of URLs currently being crawled.
+  # Add a new site by adding a line here. Remove one by deleting its line.
+  target_urls:
+    - https://hub.globalsportsjobs.com/jobs-senior-management
+    - https://www.uksport.gov.uk/jobs-in-sport
+    - https://www.forsythbarnes.com/jobs?sector=sports
+    - https://sportswork.co
+    - https://www.linkedin.com/jobs/sports-jobs-london
 
 email:
-  # Where the job digest gets sent.
+  # Where the digest gets sent.
   destination_email: "raj.arjan@gmail.com"
 
   # SMTP settings for the account that SENDS the digest.
@@ -32,22 +55,14 @@ email:
   # smtp password -> read from .env as SMTP_PASSWORD
 
 llm:
-  # Which model evaluates each scraped listing.
+  # Which model evaluates each scraped item.
   # gemini api key -> read from .env as GEMINI_API_KEY
   model: "gemini-2.5-flash"
-
-# Criteria the LLM evaluates every listing against.
-criteria:
-  min_seniority: "Senior, Director, or Executive level"
-  industry: "Sports"
-  location: "London"
-  # Only listings scoring at or above this get included in the email digest (1-10).
-  min_match_score: 7
 
 scraper:
   # Run the browser without a visible window. Set to false to watch it work.
   headless: true
   # How long (ms) to wait for a page to load before giving up on that site.
   page_timeout_ms: 30000
-  # Cap on how many candidate listings to pull from a single site per run.
-  max_jobs_per_site: 25
+  # Cap on how many candidate items to pull from a single site per run.
+  max_items_per_site: 25

@@ -1,11 +1,11 @@
 """Loads all runtime configuration.
 
-Non-secret settings (target URLs, criteria, SMTP host, etc.) come from
+Non-secret settings (the scout definition, SMTP host, etc.) come from
 config.yaml, which is meant to be edited directly by the end user.
 Secrets (SMTP password, Gemini API key) come from environment
 variables, loaded from a local .env file — see .env.example.
 
-GEMINI_API_KEY is required — the pipeline can't evaluate listings
+GEMINI_API_KEY is required — the pipeline can't evaluate scraped items
 without it. SMTP_PASSWORD is optional: without it, scraping and
 evaluation still run normally, the email digest is just skipped.
 """
@@ -28,6 +28,9 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 @dataclass
 class Settings:
+    scout_name: str
+    scout_instructions: str
+    min_match_score: int
     target_urls: list[str]
 
     destination_email: str
@@ -39,14 +42,9 @@ class Settings:
     llm_model: str
     gemini_api_key: str
 
-    min_seniority: str
-    industry: str
-    location: str
-    min_match_score: int
-
     headless: bool
     page_timeout_ms: int
-    max_jobs_per_site: int
+    max_items_per_site: int
 
     @property
     def email_config(self) -> dict:
@@ -55,14 +53,6 @@ class Settings:
             "smtp_host": self.smtp_host,
             "smtp_port": self.smtp_port,
             "sender_email": self.sender_email,
-        }
-
-    @property
-    def criteria(self) -> dict:
-        return {
-            "min_seniority": self.min_seniority,
-            "industry": self.industry,
-            "location": self.location,
         }
 
 
@@ -79,8 +69,12 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
             "Copy .env.example to .env and fill it in."
         )
 
+    scout = raw["scout"]
     return Settings(
-        target_urls=list(raw["target_urls"]),
+        scout_name=scout["name"],
+        scout_instructions=scout["instructions"].strip(),
+        min_match_score=int(scout["min_match_score"]),
+        target_urls=list(scout["target_urls"]),
         destination_email=raw["email"]["destination_email"],
         smtp_host=raw["email"]["smtp_host"],
         smtp_port=int(raw["email"]["smtp_port"]),
@@ -88,11 +82,7 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
         smtp_password=smtp_password,
         llm_model=raw["llm"]["model"],
         gemini_api_key=gemini_api_key,
-        min_seniority=raw["criteria"]["min_seniority"],
-        industry=raw["criteria"]["industry"],
-        location=raw["criteria"]["location"],
-        min_match_score=int(raw["criteria"]["min_match_score"]),
         headless=bool(raw["scraper"]["headless"]),
         page_timeout_ms=int(raw["scraper"]["page_timeout_ms"]),
-        max_jobs_per_site=int(raw["scraper"]["max_jobs_per_site"]),
+        max_items_per_site=int(raw["scraper"]["max_items_per_site"]),
     )

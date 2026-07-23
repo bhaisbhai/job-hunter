@@ -8,14 +8,13 @@ from unittest.mock import MagicMock, patch
 
 from google.genai import errors
 
-from src.evaluator import JobEvaluation, evaluate_all, evaluate_listing
-from src.scraper import JobListing
+from src.evaluator import ScoutedItem, evaluate_all, evaluate_listing
+from src.scraper import ScrapedListing
 
-CRITERIA = {
-    "min_seniority": "Senior/Director/Executive",
-    "industry": "Sports",
-    "location": "London",
-}
+INSTRUCTIONS = (
+    "Look for Senior, Director, or Executive level roles in the Sports "
+    "industry, based in London."
+)
 
 MODEL = "gemini-2.5-flash"
 
@@ -46,11 +45,11 @@ def _bad_request_error() -> errors.ClientError:
 
 
 def test_evaluate_listing_returns_parsed_evaluation():
-    expected = JobEvaluation(
-        job_title="Head of Partnerships",
-        company="Acme Sports",
+    expected = ScoutedItem(
+        title="Head of Partnerships",
+        subtitle="Acme Sports",
         url="https://example.com/jobs/123",
-        salary_range="£90,000 - £110,000",
+        price="£90,000 - £110,000",
         match_score=9,
         reasoning="Senior sports role based in London.",
     )
@@ -62,14 +61,14 @@ def test_evaluate_listing_returns_parsed_evaluation():
         model=MODEL,
         raw_text="Head of Partnerships at Acme Sports, London, £90k-£110k",
         source_url="https://example.com/jobs",
-        criteria=CRITERIA,
+        instructions=INSTRUCTIONS,
     )
 
     assert result == expected
     client.models.generate_content.assert_called_once()
     _, kwargs = client.models.generate_content.call_args
     assert kwargs["model"] == MODEL
-    assert kwargs["config"].response_schema is JobEvaluation
+    assert kwargs["config"].response_schema is ScoutedItem
 
 
 def test_evaluate_listing_returns_none_when_unparsed():
@@ -81,7 +80,7 @@ def test_evaluate_listing_returns_none_when_unparsed():
         model=MODEL,
         raw_text="some listing text",
         source_url="https://example.com/jobs",
-        criteria=CRITERIA,
+        instructions=INSTRUCTIONS,
     )
 
     assert result is None
@@ -96,18 +95,18 @@ def test_evaluate_listing_returns_none_on_api_error():
         model=MODEL,
         raw_text="some listing text",
         source_url="https://example.com/jobs",
-        criteria=CRITERIA,
+        instructions=INSTRUCTIONS,
     )
 
     assert result is None
 
 
 def test_evaluate_all_skips_failed_evaluations():
-    good = JobEvaluation(
-        job_title="Director of Sport",
-        company="Big League Co",
+    good = ScoutedItem(
+        title="Director of Sport",
+        subtitle="Big League Co",
         url="https://example.com/jobs/1",
-        salary_range=None,
+        price=None,
         match_score=8,
         reasoning="Matches all criteria.",
     )
@@ -118,21 +117,21 @@ def test_evaluate_all_skips_failed_evaluations():
     ]
 
     listings = [
-        JobListing(source_url="https://example.com/a", raw_text="listing A"),
-        JobListing(source_url="https://example.com/b", raw_text="listing B"),
+        ScrapedListing(source_url="https://example.com/a", raw_text="listing A"),
+        ScrapedListing(source_url="https://example.com/b", raw_text="listing B"),
     ]
 
-    results = evaluate_all(client, MODEL, listings, CRITERIA)
+    results = evaluate_all(client, MODEL, listings, INSTRUCTIONS)
 
     assert results == [good]
 
 
 def test_evaluate_listing_retries_after_rate_limit_then_succeeds():
-    expected = JobEvaluation(
-        job_title="Head of Partnerships",
-        company="Acme Sports",
+    expected = ScoutedItem(
+        title="Head of Partnerships",
+        subtitle="Acme Sports",
         url="https://example.com/jobs/123",
-        salary_range=None,
+        price=None,
         match_score=8,
         reasoning="Matches criteria.",
     )
@@ -145,7 +144,7 @@ def test_evaluate_listing_retries_after_rate_limit_then_succeeds():
             model=MODEL,
             raw_text="some listing text",
             source_url="https://example.com/jobs",
-            criteria=CRITERIA,
+            instructions=INSTRUCTIONS,
         )
 
     assert result == expected
@@ -163,7 +162,7 @@ def test_evaluate_listing_gives_up_after_max_rate_limit_retries():
             model=MODEL,
             raw_text="some listing text",
             source_url="https://example.com/jobs",
-            criteria=CRITERIA,
+            instructions=INSTRUCTIONS,
         )
 
     assert result is None
@@ -180,7 +179,7 @@ def test_evaluate_listing_does_not_retry_non_rate_limit_client_error():
             model=MODEL,
             raw_text="some listing text",
             source_url="https://example.com/jobs",
-            criteria=CRITERIA,
+            instructions=INSTRUCTIONS,
         )
 
     assert result is None

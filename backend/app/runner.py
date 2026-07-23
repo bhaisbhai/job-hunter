@@ -13,12 +13,12 @@ from google import genai
 from sqlmodel import Session
 
 from src.emailer import send_digest
-from src.evaluator import JobEvaluation, evaluate_listing
+from src.evaluator import ScoutedItem, evaluate_listing
 from src.scraper import scrape_all
 from src.settings import load_settings
 
 from .db import engine
-from .models import JobMatch, Run
+from .models import Item, Run
 
 logger = logging.getLogger(__name__)
 
@@ -43,34 +43,34 @@ def execute_run(run_id: str, send_email: bool) -> None:
         listings = scrape_all(
             settings.target_urls,
             headless=settings.headless,
-            max_jobs_per_site=settings.max_jobs_per_site,
+            max_items_per_site=settings.max_items_per_site,
             page_timeout_ms=settings.page_timeout_ms,
         )
         _set_status(run_id, status="evaluating", listings_scraped=len(listings))
 
         client = genai.Client(api_key=settings.gemini_api_key)
-        matches: list[JobMatch] = []
+        matches: list[Item] = []
         evaluation_failures = 0
         for listing in listings:
             evaluation = evaluate_listing(
-                client, settings.llm_model, listing.raw_text, listing.source_url, settings.criteria
+                client, settings.llm_model, listing.raw_text, listing.source_url, settings.scout_instructions
             )
             if evaluation is None:
                 evaluation_failures += 1
             else:
-                match = JobMatch(
+                item = Item(
                     run_id=run_id,
-                    job_title=evaluation.job_title,
-                    company=evaluation.company,
+                    title=evaluation.title,
+                    subtitle=evaluation.subtitle,
                     url=evaluation.url,
-                    salary_range=evaluation.salary_range,
+                    price=evaluation.price,
                     match_score=evaluation.match_score,
                     reasoning=evaluation.reasoning,
                     source_url=listing.source_url,
                 )
-                matches.append(match)
+                matches.append(item)
                 with Session(engine) as session:
-                    session.add(match)
+                    session.add(item)
                     session.commit()
 
             # Persist after every listing (not just at the end) so the
@@ -90,19 +90,21 @@ def execute_run(run_id: str, send_email: bool) -> None:
 
         email_sent = False
         if send_email and top_matches:
-            digest_jobs = [
-                JobEvaluation(
-                    job_title=m.job_title,
-                    company=m.company,
+            digest_items = [
+                ScoutedItem(
+                    title=m.title,
+                    subtitle=m.subtitle,
                     url=m.url,
-                    salary_range=m.salary_range,
+                    price=m.price,
                     match_score=m.match_score,
                     reasoning=m.reasoning,
                 )
                 for m in top_matches
             ]
             try:
-                email_sent = send_digest(digest_jobs, settings.email_config, settings.smtp_password)
+                email_sent = send_digest(
+                    digest_items, settings.email_config, settings.smtp_password, settings.scout_name
+                )
             except Exception:
                 # A broken email step shouldn't discard results the scrape/evaluate
                 # stages already produced — log it and let the run complete.

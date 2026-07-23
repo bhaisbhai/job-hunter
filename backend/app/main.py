@@ -14,10 +14,10 @@ from sqlmodel import Session, select
 from src.settings import load_settings
 
 from .db import engine, init_db
-from .models import JobMatch, Run
+from .models import Item, Run
 from .runner import execute_run
 
-app = FastAPI(title="Job Hunter API")
+app = FastAPI(title="Scout API")
 
 origins = [
     origin.strip()
@@ -46,11 +46,14 @@ def health():
 def get_config():
     settings = load_settings()
     return {
+        "scout": {
+            "name": settings.scout_name,
+            "instructions": settings.scout_instructions,
+            "min_match_score": settings.min_match_score,
+        },
         "target_urls": settings.target_urls,
         "destination_email": settings.destination_email,
         "llm_model": settings.llm_model,
-        "criteria": settings.criteria,
-        "min_match_score": settings.min_match_score,
     }
 
 
@@ -67,9 +70,9 @@ def get_run(run_id: str):
         if run is None:
             raise HTTPException(status_code=404, detail="Run not found")
         matches = session.exec(
-            select(JobMatch)
-            .where(JobMatch.run_id == run_id)
-            .order_by(JobMatch.match_score.desc())
+            select(Item)
+            .where(Item.run_id == run_id)
+            .order_by(Item.match_score.desc())
         ).all()
         return {"run": run, "matches": matches}
 

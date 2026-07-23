@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { EmptyState } from "./components/EmptyState";
 import { Header } from "./components/Header";
-import { JobCard } from "./components/JobCard";
+import { ResultCard } from "./components/ResultCard";
 import { RunSelector } from "./components/RunSelector";
 import { StatsBar } from "./components/StatsBar";
 import { StatusBanner } from "./components/StatusBanner";
@@ -114,8 +114,8 @@ export default function App() {
 
             {runDetail.matches.length > 0 && (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {runDetail.matches.map((job) => (
-                  <JobCard key={job.id} job={job} />
+                {runDetail.matches.map((item) => (
+                  <ResultCard key={item.id} item={item} />
                 ))}
               </div>
             )}

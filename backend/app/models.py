@@ -1,5 +1,5 @@
 """Persisted run history: one Run per scrape+evaluate cycle, with its
-matched JobMatch rows."""
+scouted Item rows."""
 
 from __future__ import annotations
 
@@ -28,13 +28,13 @@ class Run(SQLModel, table=True):
     error_message: Optional[str] = None
 
 
-class JobMatch(SQLModel, table=True):
+class Item(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     run_id: str = Field(foreign_key="run.id", index=True)
-    job_title: str
-    company: str
+    title: str
+    subtitle: str
     url: str
-    salary_range: Optional[str] = None
+    price: Optional[str] = None
     match_score: int
     reasoning: str
     source_url: str

@@ -1,16 +1,21 @@
-# Job Hunter
+# Scout
 
-Automated job scraper and evaluator, with a live dashboard on top. It
-crawls a configurable list of job board URLs with Playwright, has Gemini
-score each listing against your criteria (seniority, industry, location),
-emails you an HTML digest of everything scoring 7/10+, and shows every run
-as a browsable set of job cards in a web dashboard.
+A generic crawl-and-evaluate engine with a live dashboard on top. Point it
+at a list of URLs, describe what you're looking for in plain English, and
+it crawls those pages with Playwright, has Gemini score every item it
+finds against your instructions, emails you an HTML digest of everything
+scoring at or above your threshold, and shows every run as a browsable
+set of result cards in the dashboard.
+
+The whole thing is defined by one config file — the same engine works
+for job listings, apartment listings, product deals, event postings, or
+anything else you can point a URL at and describe in a sentence.
 
 ## Project structure
 
 ```
-job-hunter/
-├── config.yaml         # EDIT THIS: target URLs, destination email, criteria
+scout/
+├── config.yaml         # EDIT THIS: what to scout, where to look, where to send results
 ├── .env.example        # copy to .env and fill in secrets (local dev / CLI use)
 ├── requirements.txt     # shared scraping/evaluation/email deps
 ├── src/                  # core pipeline — used by both the CLI and the API
@@ -24,7 +29,7 @@ job-hunter/
 │   ├── app/
 │   │   ├── main.py           # routes
 │   │   ├── runner.py          # background scrape+evaluate+email job
-│   │   ├── models.py           # Run / JobMatch DB tables (SQLModel)
+│   │   ├── models.py           # Run / Item DB tables (SQLModel)
 │   │   └── db.py                # SQLite by default; DATABASE_URL to use Postgres
 │   └── requirements.txt
 ├── frontend/                # React + Tailwind dashboard
@@ -43,7 +48,7 @@ There are two independent ways to run this:
 ## 1. Install
 
 ```bash
-cd job-hunter
+cd scout
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt -r backend/requirements.txt
 playwright install chromium
@@ -53,11 +58,15 @@ playwright install chromium
 
 **`config.yaml`** — edit this directly. It's the single place to:
 
-- Add/remove the URLs being crawled (`target_urls`)
+- Define what this scout is looking for (`scout.name`, `scout.instructions` — free text, dropped straight into the LLM prompt)
+- Set the score threshold for the digest (`scout.min_match_score`)
+- Add/remove the URLs being crawled (`scout.target_urls`)
 - Set your destination email (`email.destination_email`)
 - Set the sender account's SMTP host/port/address (`email.*`)
-- Adjust match criteria and the score threshold (`criteria.*`)
 - Choose the Gemini model (`llm.model`)
+
+Repurposing Scout for something other than jobs means rewriting
+`scout.instructions` and `scout.target_urls` — no code changes needed.
 
 **`.env`** — copy `.env.example` to `.env` and fill in the two secrets:
 
@@ -86,10 +95,10 @@ normal login password) for `SMTP_PASSWORD`.
 python -m src.main
 ```
 
-Scrapes every URL in `config.yaml`, evaluates each candidate listing with
-Gemini, and — if anything scores at or above `min_match_score` — emails a
-digest to `destination_email`. If nothing qualifies, no email is sent
-(this is logged, not an error).
+Scrapes every URL in `config.yaml`, evaluates each candidate item with
+Gemini against `scout.instructions`, and — if anything scores at or above
+`min_match_score` — emails a digest to `destination_email`. If nothing
+qualifies, no email is sent (this is logged, not an error).
 
 ## 4. Run it — web dashboard (local dev)
 
@@ -110,8 +119,9 @@ npm run dev
 ```
 
 Open the printed `localhost:5173` URL. Click **Run Now** to trigger a
-live scrape+evaluate cycle; the dashboard polls and shows progress, then
-renders every evaluated listing as a job card once it finishes.
+live scrape+evaluate cycle; the dashboard shows live progress ("12/51
+evaluated") and renders each result as a card as soon as it's evaluated,
+rather than waiting for the whole run to finish.
 
 ## 5. Run the tests
 
@@ -148,12 +158,12 @@ instead:
    Environment):
    - `GEMINI_API_KEY`
    - `SMTP_PASSWORD`
-   - `CORS_ORIGINS` — your Vercel frontend URL, e.g. `https://job-hunter.vercel.app` (comma-separate multiple origins if needed)
+   - `CORS_ORIGINS` — your Vercel frontend URL, e.g. `https://scout.vercel.app` (comma-separate multiple origins if needed)
 5. Set the health check path to `/api/health`.
 6. Deploy. Render builds the `Dockerfile`, which installs Chromium via
    `playwright install --with-deps chromium` — no extra setup needed for
    scraping to work.
-7. Note the service's public URL (e.g. `https://job-hunter-backend.onrender.com`) — the frontend needs it.
+7. Note the service's public URL (e.g. `https://scout-backend.onrender.com`) — the frontend needs it.
 
 The Free instance type spins down after ~15 minutes of inactivity and
 takes 30–60s to wake back up on the next request.
@@ -168,10 +178,16 @@ Postgres instance (Render offers managed Postgres) — `db.py` already
 supports both with no code changes; you'd just add `psycopg2-binary` to
 `backend/requirements.txt`.
 
+**Deploys interrupt active runs:** if Render's auto-deploy is on, every
+push rebuilds and restarts the container — which kills whatever run is
+currently in progress and, combined with the ephemeral filesystem above,
+wipes its run history too. Avoid pushing/deploying while a real run is
+active.
+
 **Config note:** `config.yaml` is baked into the Docker image at deploy
-time. Changing target URLs, criteria, or the email threshold means
-editing `config.yaml` and redeploying — there's no in-dashboard config
-editor in this build.
+time. Changing what's being scouted, the target URLs, or the email
+threshold means editing `config.yaml` and redeploying — there's no
+in-dashboard config editor in this build.
 
 ### Frontend on Vercel
 
@@ -180,27 +196,29 @@ editor in this build.
    needs to know the frontend lives in a subfolder). Framework preset
    "Vite" should be auto-detected.
 3. Set the environment variable:
-   - `VITE_API_URL` — the Render backend URL from above, e.g. `https://job-hunter-backend.onrender.com`
+   - `VITE_API_URL` — the Render backend URL from above, e.g. `https://scout-backend.onrender.com`
 4. Deploy. Vercel builds with `npm run build` and serves `frontend/dist`.
 5. Go back to Render and set `CORS_ORIGINS` to this Vercel URL (step 3 above), then redeploy the backend so it accepts requests from the live frontend.
 
 ### After both are live
 
-Visit the Vercel URL, click **Run Now**. First real run against actual
-job sites will take a while (multiple sites × up to `max_jobs_per_site`
-LLM evaluations each) — consider lowering `max_jobs_per_site` in
-`config.yaml` while testing to keep runs fast and cheap, then raise it
-back up once you're happy with the results.
+Visit the Vercel URL, click **Run Now**. A full run against real sites can
+take a while, especially on Gemini's free tier (which caps requests per
+minute — Scout retries with backoff rather than giving up, so a run just
+takes longer rather than failing outright). Consider lowering
+`max_items_per_site` in `config.yaml` while testing to keep runs fast and
+cheap, then raise it back up once you're happy with the results.
 
-## Notes on scraping real job boards
+## Notes on scraping real sites
 
-Job board markup varies a lot and changes over time, and some sites (like
+Site markup varies a lot and changes over time, and some sites (like
 LinkedIn) actively try to block automated browsing. `src/scraper.py` uses
-a set of common "job card" selectors (`article`, `li[class*=job]`, etc.)
-and falls back to chunking the raw page text if none of them match, so a
-run never silently returns zero listings for a page that actually loaded
-— but for best results on a specific site you may want to add a selector
-to `CARD_SELECTORS` in `src/scraper.py` that matches that site's markup.
-Because the evaluator receives raw, possibly-messy text and is instructed
-to score obviously-non-job text low, an imperfect extraction degrades to
-a low `match_score` rather than a crash.
+a set of common "card" selectors (`article`, `li[class*=card]`,
+`div[class*=listing]`, etc.) and falls back to chunking the raw page text
+if none of them match, so a run never silently returns zero items for a
+page that actually loaded — but for best results on a specific site you
+may want to add a selector to `CARD_SELECTORS` in `src/scraper.py` that
+matches that site's markup. Because the evaluator receives raw,
+possibly-messy text and is instructed to score obviously-irrelevant text
+low, an imperfect extraction degrades to a low `match_score` rather than
+a crash.

@@ -1,5 +1,5 @@
-"""Entry point: scrape configured job sites, evaluate every listing with
-the LLM against the user's criteria, and email a digest of the top matches.
+"""Entry point: scrape the configured scout's target URLs, evaluate every
+item found against its instructions, and email a digest of the top matches.
 
 Run with:  python -m src.main
 """
@@ -22,27 +22,27 @@ logger = logging.getLogger(__name__)
 def main() -> None:
     settings = load_settings()
 
-    logger.info("Scraping %d configured URL(s)...", len(settings.target_urls))
+    logger.info("[%s] Scraping %d configured URL(s)...", settings.scout_name, len(settings.target_urls))
     listings = scrape_all(
         settings.target_urls,
         headless=settings.headless,
-        max_jobs_per_site=settings.max_jobs_per_site,
+        max_items_per_site=settings.max_items_per_site,
         page_timeout_ms=settings.page_timeout_ms,
     )
-    logger.info("Found %d candidate listing(s) to evaluate.", len(listings))
+    logger.info("Found %d candidate item(s) to evaluate.", len(listings))
 
     client = genai.Client(api_key=settings.gemini_api_key)
-    evaluations = evaluate_all(client, settings.llm_model, listings, settings.criteria)
-    logger.info("Evaluated %d listing(s).", len(evaluations))
+    evaluations = evaluate_all(client, settings.llm_model, listings, settings.scout_instructions)
+    logger.info("Evaluated %d item(s).", len(evaluations))
 
     top_matches = sorted(
         (e for e in evaluations if e.match_score >= settings.min_match_score),
         key=lambda e: e.match_score,
         reverse=True,
     )
-    logger.info("%d listing(s) scored >= %d.", len(top_matches), settings.min_match_score)
+    logger.info("%d item(s) scored >= %d.", len(top_matches), settings.min_match_score)
 
-    send_digest(top_matches, settings.email_config, settings.smtp_password)
+    send_digest(top_matches, settings.email_config, settings.smtp_password, settings.scout_name)
 
 
 if __name__ == "__main__":

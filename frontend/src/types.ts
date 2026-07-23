@@ -13,13 +13,13 @@ export interface Run {
   error_message: string | null;
 }
 
-export interface JobMatch {
+export interface ScoutedItem {
   id: number;
   run_id: string;
-  job_title: string;
-  company: string;
+  title: string;
+  subtitle: string;
   url: string;
-  salary_range: string | null;
+  price: string | null;
   match_score: number;
   reasoning: string;
   source_url: string;
@@ -27,17 +27,16 @@ export interface JobMatch {
 
 export interface RunDetail {
   run: Run;
-  matches: JobMatch[];
+  matches: ScoutedItem[];
 }
 
 export interface Config {
+  scout: {
+    name: string;
+    instructions: string;
+    min_match_score: number;
+  };
   target_urls: string[];
   destination_email: string;
   llm_model: string;
-  criteria: {
-    min_seniority: string;
-    industry: string;
-    location: string;
-  };
-  min_match_score: number;
 }

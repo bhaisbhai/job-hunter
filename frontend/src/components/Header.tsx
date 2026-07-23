@@ -11,11 +11,11 @@ export function Header({ config, running, onRunNow }: Props) {
     <header className="flex flex-col gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <h1 className="bg-gradient-to-r from-indigo-300 via-sky-200 to-emerald-200 bg-clip-text text-3xl font-bold tracking-tight text-transparent">
-          Job Hunter
+          Scout
         </h1>
         <p className="mt-1.5 max-w-xl text-sm text-slate-400">
           {config
-            ? `${config.criteria.min_seniority} · ${config.criteria.industry} · ${config.criteria.location} — scoring ${config.target_urls.length} site(s) with ${config.llm_model}`
+            ? `${config.scout.name} — scoring ${config.target_urls.length} site(s) with ${config.llm_model}`
             : "Loading configuration…"}
         </p>
       </div>
