@@ -7,6 +7,7 @@ export interface Run {
   status: RunStatus;
   listings_scraped: number;
   evaluated_count: number;
+  evaluation_failures: number;
   matched_count: number;
   email_sent: boolean;
   error_message: string | null;

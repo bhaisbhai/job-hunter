@@ -22,6 +22,7 @@ class Run(SQLModel, table=True):
     status: str = "pending"
     listings_scraped: int = 0
     evaluated_count: int = 0
+    evaluation_failures: int = 0
     matched_count: int = 0
     email_sent: bool = False
     error_message: Optional[str] = None

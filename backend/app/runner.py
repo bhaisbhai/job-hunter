@@ -50,11 +50,13 @@ def execute_run(run_id: str, send_email: bool) -> None:
 
         client = genai.Client(api_key=settings.gemini_api_key)
         matches: list[JobMatch] = []
+        evaluation_failures = 0
         for listing in listings:
             evaluation = evaluate_listing(
                 client, settings.llm_model, listing.raw_text, listing.source_url, settings.criteria
             )
             if evaluation is None:
+                evaluation_failures += 1
                 continue
             matches.append(
                 JobMatch(
@@ -102,6 +104,7 @@ def execute_run(run_id: str, send_email: bool) -> None:
             run.status = "completed"
             run.finished_at = datetime.now(timezone.utc)
             run.evaluated_count = len(matches)
+            run.evaluation_failures = evaluation_failures
             run.matched_count = len(top_matches)
             run.email_sent = email_sent
             session.add(run)
