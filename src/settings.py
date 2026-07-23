@@ -4,6 +4,10 @@ Non-secret settings (target URLs, criteria, SMTP host, etc.) come from
 config.yaml, which is meant to be edited directly by the end user.
 Secrets (SMTP password, Gemini API key) come from environment
 variables, loaded from a local .env file — see .env.example.
+
+GEMINI_API_KEY is required — the pipeline can't evaluate listings
+without it. SMTP_PASSWORD is optional: without it, scraping and
+evaluation still run normally, the email digest is just skipped.
 """
 
 from __future__ import annotations
@@ -11,6 +15,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import yaml
 from dotenv import load_dotenv
@@ -29,7 +34,7 @@ class Settings:
     smtp_host: str
     smtp_port: int
     sender_email: str
-    smtp_password: str
+    smtp_password: Optional[str]
 
     llm_model: str
     gemini_api_key: str
@@ -65,21 +70,13 @@ def load_settings(config_path: Path = CONFIG_PATH) -> Settings:
     with open(config_path, "r") as f:
         raw = yaml.safe_load(f)
 
-    smtp_password = os.environ.get("SMTP_PASSWORD")
+    smtp_password = os.environ.get("SMTP_PASSWORD") or None
     gemini_api_key = os.environ.get("GEMINI_API_KEY")
 
-    missing = [
-        name
-        for name, val in [
-            ("SMTP_PASSWORD", smtp_password),
-            ("GEMINI_API_KEY", gemini_api_key),
-        ]
-        if not val
-    ]
-    if missing:
+    if not gemini_api_key:
         raise RuntimeError(
-            f"Missing required environment variable(s): {', '.join(missing)}. "
-            "Copy .env.example to .env and fill them in."
+            "Missing required environment variable: GEMINI_API_KEY. "
+            "Copy .env.example to .env and fill it in."
         )
 
     return Settings(

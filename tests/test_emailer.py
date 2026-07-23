@@ -45,7 +45,15 @@ def test_build_digest_html_escapes_content():
 
 def test_send_digest_skips_when_no_jobs():
     with patch("src.emailer.smtplib.SMTP") as smtp_cls:
-        send_digest([], EMAIL_CONFIG, sender_password="hunter2")
+        sent = send_digest([], EMAIL_CONFIG, sender_password="hunter2")
+        assert sent is False
+        smtp_cls.assert_not_called()
+
+
+def test_send_digest_skips_when_no_password_configured():
+    with patch("src.emailer.smtplib.SMTP") as smtp_cls:
+        sent = send_digest([JOB], EMAIL_CONFIG, sender_password=None)
+        assert sent is False
         smtp_cls.assert_not_called()
 
 
@@ -54,8 +62,9 @@ def test_send_digest_sends_via_smtp():
     with patch("src.emailer.smtplib.SMTP") as smtp_cls:
         smtp_cls.return_value.__enter__.return_value = smtp_instance
 
-        send_digest([JOB], EMAIL_CONFIG, sender_password="hunter2")
+        sent = send_digest([JOB], EMAIL_CONFIG, sender_password="hunter2")
 
+        assert sent is True
         smtp_cls.assert_called_once_with(
             EMAIL_CONFIG["smtp_host"], EMAIL_CONFIG["smtp_port"]
         )

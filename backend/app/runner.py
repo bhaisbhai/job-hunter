@@ -88,8 +88,12 @@ def execute_run(run_id: str, send_email: bool) -> None:
                 )
                 for m in top_matches
             ]
-            send_digest(digest_jobs, settings.email_config, settings.smtp_password)
-            email_sent = True
+            try:
+                email_sent = send_digest(digest_jobs, settings.email_config, settings.smtp_password)
+            except Exception:
+                # A broken email step shouldn't discard results the scrape/evaluate
+                # stages already produced — log it and let the run complete.
+                logger.exception("Failed to send digest email for run %s", run_id)
 
         with Session(engine) as session:
             for match in matches:

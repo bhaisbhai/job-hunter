@@ -9,6 +9,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from html import escape
+from typing import Optional
 
 from src.evaluator import JobEvaluation
 
@@ -58,10 +59,16 @@ def build_digest_html(jobs: list[JobEvaluation]) -> str:
 </html>"""
 
 
-def send_digest(jobs: list[JobEvaluation], email_config: dict, sender_password: str) -> None:
+def send_digest(jobs: list[JobEvaluation], email_config: dict, sender_password: Optional[str]) -> bool:
+    """Returns True if the digest was actually sent, False if it was skipped
+    (no matches, or no SMTP password configured)."""
     if not jobs:
         logger.info("No jobs scored high enough this run; skipping email.")
-        return
+        return False
+
+    if not sender_password:
+        logger.info("SMTP_PASSWORD not configured; skipping email digest.")
+        return False
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f"Job Digest: {len(jobs)} new match(es)"
@@ -81,3 +88,4 @@ def send_digest(jobs: list[JobEvaluation], email_config: dict, sender_password: 
     logger.info(
         "Sent digest with %d job(s) to %s", len(jobs), email_config["destination_email"]
     )
+    return True
