@@ -57,9 +57,8 @@ def execute_run(run_id: str, send_email: bool) -> None:
             )
             if evaluation is None:
                 evaluation_failures += 1
-                continue
-            matches.append(
-                JobMatch(
+            else:
+                match = JobMatch(
                     run_id=run_id,
                     job_title=evaluation.job_title,
                     company=evaluation.company,
@@ -69,6 +68,18 @@ def execute_run(run_id: str, send_email: bool) -> None:
                     reasoning=evaluation.reasoning,
                     source_url=listing.source_url,
                 )
+                matches.append(match)
+                with Session(engine) as session:
+                    session.add(match)
+                    session.commit()
+
+            # Persist after every listing (not just at the end) so the
+            # frontend's poll shows live "X/Y evaluated" progress, and so
+            # results survive even if something fails partway through.
+            _set_status(
+                run_id,
+                evaluated_count=len(matches),
+                evaluation_failures=evaluation_failures,
             )
 
         top_matches = sorted(
@@ -97,18 +108,15 @@ def execute_run(run_id: str, send_email: bool) -> None:
                 # stages already produced — log it and let the run complete.
                 logger.exception("Failed to send digest email for run %s", run_id)
 
-        with Session(engine) as session:
-            for match in matches:
-                session.add(match)
-            run = session.get(Run, run_id)
-            run.status = "completed"
-            run.finished_at = datetime.now(timezone.utc)
-            run.evaluated_count = len(matches)
-            run.evaluation_failures = evaluation_failures
-            run.matched_count = len(top_matches)
-            run.email_sent = email_sent
-            session.add(run)
-            session.commit()
+        # Matches were already persisted incrementally as they were evaluated —
+        # only the Run's terminal state is left to record.
+        _set_status(
+            run_id,
+            status="completed",
+            finished_at=datetime.now(timezone.utc),
+            matched_count=len(top_matches),
+            email_sent=email_sent,
+        )
 
     except Exception:
         logger.exception("Run %s failed", run_id)

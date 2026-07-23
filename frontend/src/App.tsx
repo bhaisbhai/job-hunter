@@ -109,19 +109,20 @@ export default function App() {
 
         {runDetail && (
           <>
-            <StatusBanner status={runDetail.run.status} errorMessage={runDetail.run.error_message} />
-            {runDetail.run.status === "completed" && <StatsBar run={runDetail.run} />}
+            <StatusBanner run={runDetail.run} />
+            {runDetail.run.listings_scraped > 0 && <StatsBar run={runDetail.run} />}
 
-            {runDetail.run.status === "completed" &&
-              (runDetail.matches.length > 0 ? (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {runDetail.matches.map((job) => (
-                    <JobCard key={job.id} job={job} />
-                  ))}
-                </div>
-              ) : (
-                <EmptyState hasRuns />
-              ))}
+            {runDetail.matches.length > 0 && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {runDetail.matches.map((job) => (
+                  <JobCard key={job.id} job={job} />
+                ))}
+              </div>
+            )}
+
+            {!ACTIVE_STATUSES.has(runDetail.run.status) && runDetail.matches.length === 0 && (
+              <EmptyState hasRuns />
+            )}
           </>
         )}
 
